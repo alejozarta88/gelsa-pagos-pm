@@ -1,0 +1,33 @@
+spring:
+  application:
+    name: pagos-pmv
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/pagos}
+    username: ${DB_USER:pagos}
+    password: ${DB_PASSWORD:pagos}
+server:
+  port: 8080
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+pagos:
+  # Sin valor por defecto: si falta el secreto, la aplicación no arranca.
+  webhook-secret: ${PSP_WEBHOOK_SECRET}
+  provider-base-url: ${PSP_BASE_URL:http://localhost:${local.server.port:8080}/psp-sim}
+  self-base-url: ${SELF_BASE_URL:http://localhost:${local.server.port:8080}}
+  provider-timeout: 3s
+  pending-recheck: 20s
+  unknown-recheck: 5s
+  max-inbox-attempts: 8
+  max-reconcile-attempts: 12
+  inbox-poll-ms: 300
+  reconcile-poll-ms: 2000
+  outbox-poll-ms: 500
+psp-sim:
+  auto-complete: true
+  timeout-delay-ms: 4500

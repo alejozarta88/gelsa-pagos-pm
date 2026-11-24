@@ -1,0 +1,22 @@
+proyecto: pagos-pmv
+autor: Mario Alejandro Zarta Arias
+implementado:
+  api: órdenes, inicio de pago idempotente, consulta con línea de tiempo
+  integridad:
+    - UNIQUE(idempotency_key) y respuesta repetida con el mismo intento
+    - índice parcial de un intento activo por orden (409)
+    - índice parcial de un aprobado por orden y desvío a REFUND_REQUIRED
+    - UNIQUE(provider, provider_event_id) en el inbox
+    - transiciones monótonas con bloqueo de orden y versión
+    - estado, transición y outbox en una transacción
+  resiliencia: timeouts explícitos, UNKNOWN + conciliación con backoff, reintentos con DEAD en el inbox
+  seguridad: HMAC-SHA256 con ventana de 5 min y comparación en tiempo constante; secretos por entorno
+  observabilidad: logs ECS con correlation_id, actuator, métricas de integridad por SQL
+  demo: pasarela simulada hostil y panel de caos
+pruebas: 4 unitarias de la máquina de estados y 6 de integración con PostgreSQL real (Testcontainers)
+no_implementado: ver docs/DEBT.md (DT-01 a DT-12)
+supuestos: ver specs/01-especificacion.md (B1 a B4)
+uso_de_ia:
+  herramientas: Claude (Anthropic)
+  donde: borradores de código, pruebas y documentación
+  como_se_valido: especificación con criterios de aceptación antes del código, pruebas de concurrencia contra PostgreSQL real en CI, revisión del autor de cada decisión

@@ -1,0 +1,44 @@
+# Uso en el VPS:  cp .env.example .env  (editar valores)  y luego  docker compose --profile tunnel up -d --build
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: pagos
+      POSTGRES_USER: pagos
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Define DB_PASSWORD en .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pagos -d pagos"]
+      interval: 5s
+      retries: 10
+    restart: unless-stopped
+
+  app:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:postgresql://db:5432/pagos
+      DB_USER: pagos
+      DB_PASSWORD: ${DB_PASSWORD}
+      PSP_WEBHOOK_SECRET: ${PSP_WEBHOOK_SECRET:?Define PSP_WEBHOOK_SECRET en .env}
+      LOGGING_STRUCTURED_FORMAT_CONSOLE: ecs
+    # Solo escucha en localhost del VPS: el acceso público entra por Cloudflare Tunnel, no por un puerto abierto.
+    ports:
+      - "127.0.0.1:8085:8080"
+    restart: unless-stopped
+
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CF_TUNNEL_TOKEN:-}
+    depends_on:
+      - app
+    profiles: ["tunnel"]
+    restart: unless-stopped
+
+volumes:
+  pgdata:

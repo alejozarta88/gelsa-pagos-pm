@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pagos asíncronos · PMV</title>
+<style>
+body{font-family:system-ui,Segoe UI,Arial,sans-serif;margin:0;background:#f6f7f5;color:#1f2a24}
+header{background:#2e4238;color:#fff;padding:18px 28px}
+header h1{margin:0;font-size:20px}header p{margin:4px 0 0;color:#cfd8d2;font-size:13px}
+main{max-width:1100px;margin:0 auto;padding:20px}
+section{background:#fff;border:1px solid #dde3de;border-radius:6px;padding:16px;margin-bottom:16px}
+h2{font-size:15px;margin:0 0 12px}
+.row{display:flex;gap:12px;flex-wrap:wrap;align-items:end}
+label{font-size:12px;color:#5a645e;display:flex;flex-direction:column;gap:4px}
+input{width:110px;padding:6px;border:1px solid #c9d1cb;border-radius:4px}
+button{background:#b8661f;color:#fff;border:0;border-radius:4px;padding:8px 16px;font-weight:600;cursor:pointer}
+button:disabled{background:#c9c9c9}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
+.m{border:1px solid #e1e6e2;border-radius:5px;padding:10px}
+.m b{display:block;font-size:22px}.m span{font-size:12px;color:#5a645e}
+.m.key{border-color:#b8661f;background:#fbf3e8}
+table{width:100%;border-collapse:collapse;font-size:13px}
+td,th{padding:6px;border-bottom:1px solid #eef1ee;text-align:left}
+tr.click{cursor:pointer}tr.click:hover{background:#f3f6f3}
+code{font-size:12px}.muted{color:#5a645e;font-size:12px}
+</style>
+</head>
+<body>
+<header><h1>Integración asíncrona con pasarela de pagos · PMV</h1>
+<p>Java 21 · Spring Boot 3 · PostgreSQL. La pasarela simulada responde tarde, duplica, desordena y pierde notificaciones.</p></header>
+<main>
+<section>
+<h2>Correr una prueba de caos</h2>
+<div class="row">
+<label>Pagos<input id="pagos" type="number" value="200" min="1" max="1000"></label>
+<label>Webhooks duplicados<input id="duplicados" type="number" step="0.01" value="0.10"></label>
+<label>Fuera de orden<input id="desorden" type="number" step="0.01" value="0.10"></label>
+<label>Timeouts al crear<input id="timeouts" type="number" step="0.01" value="0.05"></label>
+<label>Webhooks perdidos<input id="perdidos" type="number" step="0.01" value="0.03"></label>
+<label>Clientes impacientes<input id="impacientes" type="number" step="0.01" value="0.50"></label>
+<button id="go">Ejecutar</button>
+</div>
+<p class="muted">Las tasas son probabilidades por pago (máximo 0,5). Un cliente impaciente, tras un timeout, intenta pagar otra vez con una clave nueva.</p>
+</section>
+<section><h2>Lo que se mide</h2><div class="grid" id="metrics"></div>
+<p class="muted">El DAR estimó cerca de 0,25 cobros duplicados por cada 100.000 pagos para esta arquitectura. Aquí se mide sobre la pasarela simulada.</p></section>
+<section><h2>Últimas órdenes <span class="muted">(clic para ver la línea de tiempo)</span></h2><table id="orders"></table></section>
+<section id="tl" hidden><h2>Línea de tiempo</h2><table id="timeline"></table></section>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const labels={cobrosDuplicados:['Cobros duplicados',1],ordenesInconsistentes:['Órdenes inconsistentes',1],divergenciasConProveedor:['Divergencias con el proveedor',1],
+intentos:['Intentos de pago'],webhooksRecibidos:['Webhooks guardados'],webhooksDuplicadosDescartados:['Duplicados descartados'],
+eventosObsoletosIgnorados:['Eventos obsoletos ignorados'],timeoutsDelProveedor:['Timeouts del proveedor'],reintentosIdempotentes:['Reintentos idempotentes'],
+segundosIntentosBloqueados:['Segundos intentos bloqueados (409)'],resueltosPorConciliacion:['Resueltos por conciliación'],eventosPendientes:['Eventos pendientes'],
+eventosEnDead:['Eventos en DEAD'],reembolsosRequeridos:['Reembolsos requeridos']};
+async function refresh(){
+ const m=await (await fetch('/api/metricas')).json();
+ $('metrics').innerHTML=Object.entries(labels).map(([k,[t,key]])=>`<div class="m ${key?'key':''}"><b>${m[k]}</b><span>${t}</span></div>`).join('')+
+  m.intentosPorEstado.map(r=>`<div class="m"><b>${r.n}</b><span>${r.status}</span></div>`).join('');
+ const o=await (await fetch('/api/orders')).json();
+ $('orders').innerHTML='<tr><th>Orden</th><th>Estado</th><th>Monto</th><th>Intentos</th></tr>'+o.map(r=>`<tr class="click" onclick="tl('${r.id}')"><td><code>${r.id.slice(0,8)}</code></td><td>${r.status}</td><td>${r.amount}</td><td>${r.attempts}</td></tr>`).join('');
+}
+async function tl(id){
+ const o=await (await fetch('/api/orders/'+id)).json(); $('tl').hidden=false;
+ $('timeline').innerHTML='<tr><th>Hora</th><th>Intento</th><th>De</th><th>A</th><th>Origen</th><th>Detalle</th></tr>'+o.timeline.map(t=>`<tr><td>${new Date(t.at).toLocaleTimeString()}</td><td><code>${t.attempt_id.slice(0,8)}</code></td><td>${t.from_status??'-'}</td><td>${t.to_status}</td><td>${t.source}</td><td>${t.detail??''}</td></tr>`).join('');
+ $('tl').scrollIntoView({behavior:'smooth'});
+}
+$('go').onclick=async()=>{
+ const b={};['pagos','duplicados','desorden','timeouts','perdidos','impacientes'].forEach(k=>b[k]=Number($(k).value));
+ $('go').disabled=true; const r=await fetch('/api/demo/ejecutar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});
+ if(!r.ok) alert((await r.json()).error); setTimeout(()=>$('go').disabled=false,3000);
+};
+refresh(); setInterval(refresh,1500);
+</script>
+</body></html>
