@@ -16,7 +16,8 @@ case "$1" in
   S3) desc="Se permite que un aprobado vuelva a PENDING (monotonía)"
       sed -i 's/case PENDING -> EnumSet.of(CREATED, UNKNOWN);/case PENDING -> EnumSet.of(CREATED, UNKNOWN, APPROVED);/' "$STATUS"
       test="PaymentStatusTest" ;;
-  S4) desc="La API acepta un segundo intento aunque la clave ya exista (AC-01)"
+  S4) desc="Se quitan las tres capas que protegen AC-01: busqueda previa, UNIQUE de la clave e indice de intento activo"
+      sed -i 's/CONSTRAINT uq_idempotency_key  UNIQUE (idempotency_key),/CONSTRAINT uq_idempotency_key CHECK (true),/; s/CREATE UNIQUE INDEX uq_one_active_attempt/CREATE INDEX uq_one_active_attempt/' "$SQL"
       sed -i 's/ON CONFLICT (idempotency_key) DO NOTHING/ON CONFLICT DO NOTHING/; s/Optional<AttemptRow> replay = findByKey(idempotencyKey);/Optional<AttemptRow> replay = Optional.empty();/' src/main/java/co/mzarta/pagos/api/CheckoutService.java
       test="IntegridadTest#ac01*" ;;
   *) echo "uso: sabotaje.sh S1|S2|S3|S4"; exit 2 ;;
