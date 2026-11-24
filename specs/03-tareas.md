@@ -13,5 +13,6 @@
 | T-09 | Métricas de integridad y panel | AC-10, AC-12 | Hecha |
 | T-10 | Pruebas de integración con PostgreSQL real | AC-01, 02, 04, 05, 06, 07 | Hecha |
 | T-11 | CI en GitHub Actions | todas | Hecha |
-| T-12 | Despliegue en VPS con Cloudflare Tunnel y Access | — | En curso |
+| T-12 | Despliegue en VPS con Cloudflare Tunnel y Access | — | Hecha (pagos-pmv.99223344.xyz) |
+| T-14 | Sabotajes del gate en CI (S1 a S4) | AC-01, AC-02, AC-04, AC-05 | Hecha |
 | T-13 | Pruebas de AC-03, AC-08 y AC-11 | AC-03, AC-08, AC-11 | Pendiente (DT-10) |
